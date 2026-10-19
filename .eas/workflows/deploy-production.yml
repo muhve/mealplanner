@@ -1,0 +1,43 @@
+# Runs on every push to main (i.e. every merged PR).
+# If native code is unchanged (fingerprint matches an existing build) -> OTA update.
+# If native code changed -> new production build + submit to TestFlight.
+name: Deploy to production
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  fingerprint:
+    name: Fingerprint
+    type: fingerprint
+    environment: production
+  get_ios_build:
+    name: Check for existing iOS build
+    needs: [fingerprint]
+    type: get-build
+    params:
+      fingerprint_hash: ${{ needs.fingerprint.outputs.ios_fingerprint_hash }}
+      profile: production
+  build_ios:
+    name: Build iOS
+    needs: [get_ios_build]
+    if: ${{ !needs.get_ios_build.outputs.build_id }}
+    type: build
+    params:
+      platform: ios
+      profile: production
+  submit_ios_build:
+    name: Submit iOS build to TestFlight
+    needs: [build_ios]
+    type: submit
+    params:
+      build_id: ${{ needs.build_ios.outputs.build_id }}
+  publish_ios_update:
+    name: Publish iOS OTA update
+    needs: [get_ios_build]
+    if: ${{ needs.get_ios_build.outputs.build_id }}
+    type: update
+    params:
+      branch: production
+      platform: ios

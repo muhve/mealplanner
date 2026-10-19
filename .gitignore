@@ -41,3 +41,14 @@ example
 # generated native folders
 /ios
 /android
+
+# secrets (never commit)
+.env
+gh_token
+secrets/
+
+# editor swap files
+*.swp
+
+# superpowers plan workspaces
+.superpowers/
