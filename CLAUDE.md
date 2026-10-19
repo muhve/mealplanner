@@ -2,7 +2,7 @@
 
 ## Project
 
-Meal Planner — iOS app (Expo SDK 58, Expo Router). Bundle ID `com.felix.mealplanner`.
+Meal Planner — iOS app (Expo SDK 58, Expo Router). Bundle ID `fi.muhve.mealplanner`.
 GitHub: `muhve/mealplanner`. Expo project: `mealplanner` (owner `felixlin`).
 
 ## Environment

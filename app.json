@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.felix.mealplanner",
+      "bundleIdentifier": "fi.muhve.mealplanner",
       "supportsTablet": false,
       "config": {
         "usesNonExemptEncryption": false
@@ -23,7 +23,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.felix.mealplanner"
+      "package": "fi.muhve.mealplanner"
     },
     "web": {
       "output": "static",
@@ -48,6 +48,14 @@
     "runtimeVersion": {
       "policy": "fingerprint"
     },
-    "owner": "felixlin"
+    "owner": "felixlin",
+    "extra": {
+      "eas": {
+        "projectId": "4578252e-fe90-460c-bf7e-e967d18c2301"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4578252e-fe90-460c-bf7e-e967d18c2301"
+    }
   }
 }
