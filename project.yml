@@ -26,6 +26,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: fi.muhve.mealplanner
         GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSCameraUsageDescription: "Kameraa käytetään ruokalajin kansikuvan ottamiseen."
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Kuvakirjastosta voi valita ruokalajille kansikuvan."
         INFOPLIST_KEY_CFBundleDisplayName: Meal Planner
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

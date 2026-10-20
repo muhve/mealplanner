@@ -5,7 +5,16 @@ import XCTest
 final class MemoryStore: DocumentStore {
   var values: [String: String] = [:]
   var failSave = false
-  func load(_ key: String) throws -> String? { values[key] }
+  var failBackupKeys = false
+  var unreadableBackup: String?
+  func backupKeys() throws -> [String] {
+    if failBackupKeys { throw CoreError("listing") }
+    return values.keys.filter { $0.hasPrefix(documentKey + "-backup-") }.sorted()
+  }
+  func load(_ key: String) throws -> String? {
+    if key == unreadableBackup { throw CoreError("reading") }
+    return values[key]
+  }
   func exists(_ key: String) throws -> Bool { values[key] != nil }
   func save(_ key: String, _ value: String) throws {
     if failSave { throw CoreError("disk") }
