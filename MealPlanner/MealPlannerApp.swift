@@ -1,6 +1,10 @@
 import SwiftUI
+import CloudKit
+import UIKit
 
 @main @MainActor struct MealPlannerApp: App {
+  @UIApplicationDelegateAdaptor(MealPlannerAppDelegate.self) private var appDelegate
+  @Environment(\.scenePhase) private var scenePhase
   @State private var store = AppStore()
   @State private var confirmSkipLegacy = false
   var body: some Scene {
@@ -23,6 +27,13 @@ import SwiftUI
           }
         }
       }
+      .task { await store.activateSync() }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .active { Task { await store.activateSync() } }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .CKAccountChanged)) { _ in
+        Task { await store.iCloudAccountChanged() }
+      }
       .environment(store)
       .tint(Theme.accent)
       .confirmationDialog(
@@ -34,5 +45,13 @@ import SwiftUI
       }
 
     }
+  }
+}
+
+@MainActor final class MealPlannerAppDelegate: NSObject, UIApplicationDelegate {
+  func application(_ application: UIApplication,
+                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+    application.registerForRemoteNotifications()
+    return true
   }
 }

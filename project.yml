@@ -22,6 +22,18 @@ targets:
     dependencies:
       - package: MealPlannerCore
       - sdk: libsqlite3.tbd
+    entitlements:
+      path: MealPlanner/MealPlanner.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers: [iCloud.fi.muhve.mealplanner]
+        com.apple.developer.icloud-services: [CloudKit]
+        aps-environment: development
+    info:
+      path: MealPlanner/Info.plist
+      properties:
+        UIBackgroundModes: [remote-notification]
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: fi.muhve.mealplanner

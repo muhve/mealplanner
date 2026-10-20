@@ -6,6 +6,7 @@ import AVFoundation
 @MainActor struct DishListView: View {
   @Environment(AppStore.self) private var store
   @State private var query = ""
+  @State private var syncError: String?
   private var dishes: [Dish] { store.state?.dishes ?? [] }
   private var shown: [Dish] {
     let q = fold(tidy(query))
@@ -44,9 +45,27 @@ import AVFoundation
       }
     }.warmList().navigationTitle("Ruokalajit")
       .toolbar {
-        ToolbarItem(placement: .topBarLeading) { NavigationLink("Tuo") { ImportView() } }
-        ToolbarItem(placement: .topBarTrailing) { NavigationLink("+ Uusi") { DishFormView(dish: nil) } }
+        ToolbarItem(placement: .topBarLeading) {
+          Button {
+            if case .error(let message) = store.syncStatus { syncError = message }
+          } label: {
+            Label(store.syncStatus.text, systemImage: store.syncStatus.symbol)
+              .font(.caption).labelStyle(.titleAndIcon)
+              .frame(minHeight: 44)
+          }.tint(Theme.muted)
+            .accessibilityLabel(store.syncStatus.text)
+        }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+          NavigationLink("Tuo") { ImportView() }
+          NavigationLink("+ Uusi") { DishFormView(dish: nil) }
+        }
       }
+      .alert("Synkronointivirhe", isPresented: Binding(
+        get: { syncError != nil }, set: { if !$0 { syncError = nil } })
+      ) {
+        Button("Yritä uudelleen") { Task { await store.activateSync() } }
+        Button("Sulje", role: .cancel) { syncError = nil }
+      } message: { Text(syncError ?? "") }
   }
 }
 private struct IngredientFormRow: Identifiable {
@@ -58,6 +77,9 @@ private struct IngredientFormRow: Identifiable {
   @Environment(AppStore.self) private var store
   @Environment(\.dismiss) private var dismiss
   let dish: Dish?
+  @State private var originalDish: Dish?
+  @State private var draftID: String
+  @State private var photoOwnershipUncertain = false
   @State private var name: String
   @State private var rows: [IngredientFormRow]
   @State private var error: String?
@@ -74,6 +96,8 @@ private struct IngredientFormRow: Identifiable {
   @FocusState private var focused: UUID?
   init(dish: Dish?) {
     self.dish = dish
+    _originalDish = State(initialValue: dish)
+    _draftID = State(initialValue: dish?.id ?? UUID().uuidString)
     _instructions = State(initialValue: dish?.instructions ?? "")
     _photo = State(initialValue: dish?.photo)
     _name = State(initialValue: dish?.name ?? "")
@@ -218,13 +242,15 @@ private struct IngredientFormRow: Identifiable {
       Button("Peruuta", role: .cancel) {}
     }
   }
+  // A failed journal write may still be committed by recovery. Never reclaim
+  // draft files after that point; next-launch orphan cleanup decides ownership.
   private func removePhoto() {
-    if let createdPhoto { PhotoStore().delete(createdPhoto) }
+    if let createdPhoto, !photoOwnershipUncertain { PhotoStore().delete(createdPhoto) }
     createdPhoto = nil
     photo = nil
   }
   private func acceptPhoto(_ file: String) {
-    if let createdPhoto { PhotoStore().delete(createdPhoto) }
+    if let createdPhoto, !photoOwnershipUncertain { PhotoStore().delete(createdPhoto) }
     createdPhoto = file
     photo = file
     error = nil
@@ -253,11 +279,25 @@ private struct IngredientFormRow: Identifiable {
   private func save() {
     do {
       let body = try toDishBody(name, rows.map(\.value), instructions: instructions, photo: photo)
-      let saved = Dish(id: dish?.id ?? store.id(), name: body.name, ingredients: body.ingredients,
+      var saved = Dish(id: draftID, name: body.name, ingredients: body.ingredients,
                        photo: body.photo, instructions: body.instructions)
-      error = store.change { try saveDish($0, saved) }
+      if let original = originalDish {
+        // Compare raw form values before validation trims or canonicalizes them.
+        if name == original.name { saved.name = original.name }
+        if instructions == (original.instructions ?? "") { saved.instructions = original.instructions }
+        if photo == original.photo { saved.photo = original.photo }
+        let openingRows = original.ingredients.map {
+          FormRow(name: $0.name, amount: formatAmount($0.amount), unit: $0.unit)
+        } + [FormRow(name: "", amount: "", unit: "")]
+        if rows.map(\.value) == openingRows { saved.ingredients = original.ingredients }
+      }
+      error = store.saveDishEdits(original: originalDish, edited: saved)
       if error == nil { createdPhoto = nil; dismiss() }
-    } catch { self.error = error.localizedDescription }
+      else { photoOwnershipUncertain = true }
+    } catch {
+      photoOwnershipUncertain = true
+      self.error = error.localizedDescription
+    }
   }
 }
 @MainActor struct SuggestionButtons: View {

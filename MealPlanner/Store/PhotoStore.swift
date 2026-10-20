@@ -73,6 +73,12 @@ struct PhotoStore: Sendable {
     return name
   }
 
+  func install(assetURL: URL, name: String) throws {
+    guard let destination = url(for: name) else { throw CoreError("Virheellinen kuvatiedosto.") }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data(contentsOf: assetURL).write(to: destination, options: .atomic)
+  }
+
   func delete(_ name: String) {
     guard let url = url(for: name) else { return }
     try? FileManager.default.removeItem(at: url)
