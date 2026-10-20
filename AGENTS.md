@@ -1,42 +1,17 @@
-This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+# Swift workflow
 
-## Expo has changed — do not trust your training data
+This is a native Swift/SwiftUI iOS 17+ app. Prioritize mobile usability, accessibility, performance, and light/dark mode. Preserve the Finnish UI copy.
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
-
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
-
-## Commands
-
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
-
-```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
-```
-
-Run lint and typecheck before declaring any task done.
-
-## Navigation & Routing
-
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
-
-## Building with EAS
-
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
-
-## Rules
-
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+- Codex writes Swift. Claude verifies `MealPlannerCore` with `swift build && swift test`, reviews, and manages issue/PR workflow under CLAUDE.md.
+- Core is a local Swift package using only Foundation, with XCTest tests. Keep it Linux-buildable. No SwiftUI, UIKit, Combine, Observation or OSLog in Core; add no dependencies.
+- Use SwiftUI and Observation (`@Observable @MainActor`) in the iOS target. Target iOS 17 APIs and keep views simple; Linux cannot typecheck them.
+- XcodeGen owns project generation: edit `project.yml`, never the generated `.xcodeproj`. Never edit `ios/` or `android/`.
+- Run `swift build && swift test` inside `MealPlannerCore/` before declaring a task done. Claude runs:
+  ```bash
+  docker run --rm -v "$PWD":/w -w /w/MealPlannerCore swift:6.2-bookworm sh -c 'swift build && swift test'
+  ```
+- The developer builds and tests the app in Xcode and sends simulator screenshots. Do not claim that Linux syntax checks verify SwiftUI compilation or native behavior.
+- Keep the `ruokalista-v1` JSON shape compatible with existing device data. Back up unreadable raw data before replacing it; never publish a change before persistence succeeds.
 - Never read, print or copy `.env` or other secrets files.
+- Do not commit, push, merge or release unless the current task authorizes it. Never push to main. `yolo` authorizes autopilot to merge only when CI is green and review is clean.
+- Merging only merges code. Releases are manual Xcode builds; see `docs/MAC-SETUP.md`.

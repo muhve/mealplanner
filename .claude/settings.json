@@ -1,7 +1,4 @@
 {
-  "enabledPlugins": {
-    "expo@claude-plugins-official": true
-  },
   "permissions": {
     "allow": [
       "Bash(set -a)",
@@ -28,17 +25,10 @@
       "Bash(git reset --soft:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
-      "Bash(npm run lint:*)",
-      "Bash(npm run typecheck:*)",
-      "Bash(npx expo-doctor:*)",
-      "Bash(npx expo start:*)",
-      "Bash(npx expo install:*)",
-      "Bash(npx @expo/fingerprint:*)",
-      "Bash(npx eas-cli@latest build:list:*)",
-      "Bash(npx eas-cli@latest workflow:*)",
       "Bash(codex login status:*)",
       "Bash(tools/codex/run.sh:*)",
       "Bash(docker info:*)",
+      "Bash(docker run --rm -v \"$PWD\":/w -w /w/MealPlannerCore swift:6.2-bookworm:*)",
       "mcp__playwright",
       "Artifact",
       "SendUserFile"

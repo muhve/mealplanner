@@ -34,13 +34,13 @@ case $mode in
     rm -rf "$wt"
     git clone -q --no-hardlinks "$repo" "$wt" -b "$branch"
     [ ! -e "$wt/.env" ] || { echo ".env found in clone, aborting" >&2; exit 1; }
-    run_codex "$4" "$5" 'npm ci --no-audit --no-fund > /tmp/npm.log 2>&1 || { tail -20 /tmp/npm.log; echo "npm ci failed" >&2; exit 90; };
+    run_codex "$4" "$5" 'if [ -f package-lock.json ]; then npm ci --no-audit --no-fund > /tmp/npm.log 2>&1 || { tail -20 /tmp/npm.log; echo "npm ci failed" >&2; exit 90; }; fi;
       codex exec --dangerously-bypass-approvals-and-sandbox -o /out/report.md - < /out/prompt.md'
     ;;
   resume)
     # Bring in anything committed in the repo since (e.g. fixes Claude made itself).
     git -C "$wt" pull -q --ff-only origin "$(git -C "$wt" branch --show-current)"
-    run_codex "$3" "$4" 'npm ci --no-audit --no-fund > /tmp/npm.log 2>&1 || { tail -20 /tmp/npm.log; echo "npm ci failed" >&2; exit 90; };
+    run_codex "$3" "$4" 'if [ -f package-lock.json ]; then npm ci --no-audit --no-fund > /tmp/npm.log 2>&1 || { tail -20 /tmp/npm.log; echo "npm ci failed" >&2; exit 90; }; fi;
       codex exec resume --last --dangerously-bypass-approvals-and-sandbox -o /out/report.md - < /out/prompt.md'
     ;;
   review)
@@ -55,18 +55,18 @@ case $mode in
     cat "$4" - > "$review_prompt" <<'EOF'
 
 How to work: run `git diff main...HEAD` and read changed files as needed. REVIEW ONLY: do not modify, create or
-delete files and do not commit. You may run the project's checks (`npm test`, `npm run typecheck`) to confirm a
-suspicion. Report only real bugs: correctness, security/privacy, unmet acceptance criteria, crashes, data loss.
+delete files and do not commit. You may run the project's checks (e.g. `swift build && swift test` in
+MealPlannerCore) to confirm a suspicion. Report only real bugs: correctness, security/privacy, unmet acceptance criteria, crashes, data loss.
 No style nits. Final message format: a numbered list, most severe first, each item
 "N. [high|medium|low] path:line — summary. Scenario: …", at most 12 items, no preamble.
 If there is nothing real, the final message is exactly: No real findings.
 EOF
     # Called plainly (not in an || list) so set -e stays active inside run_codex.
-    run_codex "$review_prompt" "$5" 'npm ci --no-audit --no-fund > /tmp/npm.log 2>&1 || { tail -20 /tmp/npm.log; echo "npm ci failed" >&2; exit 90; };
+    run_codex "$review_prompt" "$5" 'if [ -f package-lock.json ]; then npm ci --no-audit --no-fund > /tmp/npm.log 2>&1 || { tail -20 /tmp/npm.log; echo "npm ci failed" >&2; exit 90; }; fi;
       codex exec --dangerously-bypass-approvals-and-sandbox -o /out/report.md - < /out/prompt.md'
     # A review must not change anything: same HEAD and refs (incl. the `main` baseline), and no tracked,
-    # untracked or ignored changes except the node_modules from npm ci.
-    changes=$(git -C "$wt" status --porcelain --untracked-files=all --ignored=matching | grep -v '^!! node_modules/$' || true)
+    # untracked or ignored changes except node_modules / Swift .build dirs.
+    changes=$(git -C "$wt" status --porcelain --untracked-files=all --ignored=matching | grep -vE '^!! (node_modules|\.build|.*/\.build)/$' || true)
     if [ "$(git -C "$wt" show-ref --head)" != "$refs" ] || [ -n "$changes" ]; then
       echo "Codex modified the clone during a review; discard its findings and rerun." >&2; exit 1
     fi

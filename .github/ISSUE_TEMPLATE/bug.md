@@ -10,5 +10,5 @@ labels: bug
 
 ## Steps to reproduce
 
-## App version / update ID
-(Settings → About, or from the EAS dashboard)
+## App version / build
+(The TestFlight app → Meal Planner shows the version and build number)

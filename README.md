@@ -1,20 +1,11 @@
 # Meal Planner
 
-iOS app built with [Expo](https://expo.dev) (SDK 58) and Expo Router. Routes live in `src/app/`.
+A native SwiftUI iPhone app (iOS 17+) for Finnish meal planning and shopping lists. Supports light/dark mode, local JSON persistence, history and migration from the previous Expo app.
 
-## Develop
+- `MealPlanner/`: SwiftUI screens and device storage.
+- `MealPlannerCore/`: Foundation-only Swift package and XCTest suite, buildable on Linux.
+- `project.yml`: XcodeGen project and signing configuration.
 
-```bash
-npm ci
-npx expo start          # dev server (press w for web)
-npm run lint && npm run typecheck && npm test && npx expo-doctor
-```
+Run `swift build && swift test` inside `MealPlannerCore/`. On a Mac, install Xcode and XcodeGen, run `xcodegen generate`, then open `MealPlanner.xcodeproj`.
 
-## How work flows
-
-See `CLAUDE.md`: every change starts from a GitHub issue, is built on a `<n>-<slug>` branch (code by Codex in
-`tools/codex/`, orchestrated by Claude) and lands through a PR into `main`. Merging to `main` deploys via
-`.eas/workflows/deploy-production.yml` — an OTA update when the native fingerprint is unchanged, otherwise a new
-build submitted to TestFlight.
-
-Secrets live in an untracked `.env` (`GH_TOKEN`, `EXPO_TOKEN`).
+See [Mac setup and manual releases](docs/MAC-SETUP.md). Merging does not deploy. The first Swift TestFlight update must be tested over an existing Expo installation to verify data migration.

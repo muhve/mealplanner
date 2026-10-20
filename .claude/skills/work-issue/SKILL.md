@@ -6,17 +6,16 @@ description: Use when picking up a GitHub issue to implement ("work on #N", "let
 # Work a GitHub issue
 
 Two modes: **interactive** (developer in the chat — ask when unsure) and **autopilot** (nobody to ask — decide
-conservatively and record each decision on the review page). Env vars do not survive between Bash calls (or into background shells): start **every** command that runs `gh`, `eas` or a push with `set -a; . ./.env; set +a;`.
+conservatively and record each decision on the review page). Env vars do not survive between Bash calls (or into background shells): start **every** command that runs `gh` or a push with `set -a; . ./.env; set +a;`.
 
 1. **Issue.** `gh issue view <n> --comments`. No issue yet (interactive)? Summarise the chat into one with
    `gh issue create --label enhancement` from `.github/ISSUE_TEMPLATE/feature.md`. Unclear criteria: interactive → ask;
    autopilot → see autopilot skill. No review page yet → create it now (`review-page` skill), Design section filled.
-2. **Branch.** `git switch main && git pull --ff-only && git switch -c <n>-<slug> && npm ci`;
-   `gh issue edit <n> --add-label in-progress`. Take **before** screenshots.
+2. **Branch.** `git switch main && git pull --ff-only && git switch -c <n>-<slug>`;
+   `gh issue edit <n> --add-label in-progress`. Record **before** simulator screenshots from the developer when available.
 3. **Build** with the `codex-build` skill: Claude writes the brief, Codex writes the code, Claude verifies and
-   commits (it falls back to Claude building it when Codex is unavailable). Follow AGENTS.md (versioned Expo docs,
-   `npx expo install`). Commit freely; history is squashed later. After each visible change: screenshot → chat.
-4. **Checks.** `npm run lint && npm run typecheck && npx expo-doctor` — all must pass. Fix, don't skip.
+   commits (it falls back to Claude building it when Codex is unavailable). Follow AGENTS.md (SwiftUI iOS 17 and Foundation-only Core). Commit freely; history is squashed later. The developer builds in Xcode and sends simulator screenshots after visible changes.
+4. **Checks.** `docker run --rm -v "$PWD":/w -w /w/MealPlannerCore swift:6.2-bookworm sh -c 'swift build && swift test'` — all must pass. Fix, don't skip.
 5. **Review–fix loop**. Codex reviews, Claude triages (`codex-build` step 5):
    1. **Codex rounds** (max 5): Codex reviews `main...HEAD`; classify each finding **real** (bug, unmet acceptance
       criterion, failing check, security, clear quality problem) or **dismissed** (style nitpick, false positive,
@@ -32,27 +31,19 @@ conservatively and record each decision on the review page). Env vars do not sur
       separate final check. Note "Codex unavailable: <reason>" on the review page.
 6. **Squash** into one commit:
    ```bash
-   git fetch origin && git rebase origin/main && npm ci   # resolve conflicts; re-run step 4 if anything changed
+   git fetch origin && git rebase origin/main   # resolve conflicts; re-run step 4 if anything changed
    git reset --soft origin/main
    git commit -F <msgfile>                          # see below
-   npm run lint && npm run typecheck && npx expo-doctor
+   docker run --rm -v "$PWD":/w -w /w/MealPlannerCore swift:6.2-bookworm sh -c 'swift build && swift test'
    ```
-   Message: imperative subject ≤ 72 chars; body = what changed and why, how it ships (OTA/native), `Closes #<n>`,
+   Message: imperative subject ≤ 72 chars; body = what changed and why, validation performed, `Closes #<n>`,
    then the attribution trailers.
-7. **Ships as.** Fingerprint check:
-   ```bash
-   H=$(npx @expo/fingerprint fingerprint:generate --platform ios 2>/dev/null | node -pe 'JSON.parse(require("fs").readFileSync(0)).hash')
-   npx eas-cli@latest build:list --platform ios --build-profile production --fingerprint-hash "$H" \
-     --status finished --json --non-interactive --limit 1
-   ```
-   Non-empty array → `OTA`. `[]` → `NATIVE` (new TestFlight build on merge).
-   **Empty `$H`** (fingerprint generation failed) → `NATIVE`; never call `build:list` with an empty hash — an empty
-   filter may match every build and wrongly say `OTA`.
+7. **Device check.** Record whether the developer has tested in Xcode on a simulator/device. Claude cannot run the app or capture simulator screenshots here.
 8. **PR.** Push the branch (credential-helper command in CLAUDE.md; `--force-with-lease` after a squash, branch only).
    `gh pr create --title "<subject>" --body-file <tmpfile>` following `.github/pull_request_template.md`:
-   `Closes #<n>`, correct "Ships as" box, `Review page: <url>`, short testing notes. Draft PR (`--draft`) if checks
+   `Closes #<n>`, device/simulator testing status, `Review page: <url>`, short testing notes. Draft PR (`--draft`) if checks
    failed. Update the review page (Changes, Checks, Review rounds, Screenshots, status `PR open`); send the PR link
-   and one after-screenshot to the chat.
+   to the chat; include an after-screenshot from the developer if available.
 9. **Merge?** Interactive → ask "merge now, or leave it for you?". Autopilot → autopilot skill decides.
    To merge: CI must pass. `gh pr checks` does **not** work with our fine-grained token ("Resource not accessible
    by personal access token"), so wait on the GitHub Actions run for the branch head instead. The run may take a
@@ -69,7 +60,7 @@ conservatively and record each decision on the review page). Env vars do not sur
    gh run watch "$ID" --exit-status
    ```
    Then `gh pr merge <pr> --squash --delete-branch`,
-   then the `deploy` skill to confirm the workflow started. Record the outcome on the review page.
+   record the outcome on the review page. Merging only merges; releases are manual from Xcode (docs/MAC-SETUP.md).
    Remove `in-progress` from the issue when the PR is opened (left open) or merged.
 
 Never merge without the developer's go-ahead, except a `yolo` issue whose gates pass (autopilot skill).

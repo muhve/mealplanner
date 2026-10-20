@@ -6,7 +6,7 @@ description: Use when the developer wants to brainstorm or design a feature or c
 # Design → GitHub issue
 
 1. Brainstorm with the `superpowers:brainstorming` skill's conversation style: one question at a time, prefer
-   multiple choice. When it helps, send screenshots of the current screens (`review-page` skill) — the developer
+   multiple choice. When it helps, use simulator screenshots of the current screens from the developer (`review-page` skill) — the developer
    is on a phone.
 2. Agree on: goal, acceptance criteria (testable, checkbox list), key decisions, anything out of scope.
 3. Read the understanding back in a short note and wait for an OK.
