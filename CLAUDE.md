@@ -45,12 +45,13 @@ GitHub: `muhve/mealplanner`. Expo project: `mealplanner` (owner `felixlin`).
 | Label | Meaning |
 |---|---|
 | `ready` | Autopilot may build it; PR left for the developer |
-| `yolo` | Autopilot may build and auto-merge: CI green + ships OTA + clean review. Otherwise → `needs-review` |
+| `yolo` | Autopilot may build and auto-merge: CI green + clean review (OTA or native build). Otherwise → `needs-review` |
 | `in-progress` | Claimed by Claude |
 | `needs-info` | Claude asked questions on the issue. After answering, remove `needs-info` and re-add `ready`/`yolo` |
 | `needs-review` | Autopilot stopped; the developer must look. To let autopilot retry, remove `needs-review` and close any open PR for it |
 
-Autopilot skips issues that already have an open PR.
+Autopilot skips issues that already have an open PR, and issues whose body has a line `Depends on #<m>` while #<m> is
+still open. Use that line whenever an issue builds on another one.
 
 ## Deployment model
 
