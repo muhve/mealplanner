@@ -24,7 +24,14 @@ earlier run; never pick them up yourself.
    done | sort -u                                                         # oldest first
    gh pr list --state open --limit 100 --json headRefName --jq '.[].headRefName'   # branches with an open PR
    ```
-   Take the first issue `<n>` with no open PR from a branch named `<n>-…`. That keeps an open `ready` PR from
+   Take the first issue `<n>` with no open PR from a branch named `<n>-…` and no unmet dependency: for each
+   `Depends on #<m>` in its body, #<m> must be closed:
+   ```bash
+   for m in $(gh issue view <n> --json body --jq .body | grep -oiE 'depends on #[0-9]+' | grep -oE '[0-9]+'); do
+     gh issue view $m --json state --jq .state                            # all CLOSED → eligible
+   done
+   ```
+   Take the first issue `<n>` that passes both checks. That keeps an open `ready` PR from
    being picked up again, while an issue whose PR was closed can be retried.
    None → `ScheduleWakeup` ~900 s with the same `/loop` prompt (`noop: true`), end the iteration.
 2. **Mode:** `yolo` only if the issue has `yolo` and **not** `ready`; otherwise `ready` (both labels → `ready`).
@@ -36,10 +43,10 @@ earlier run; never pick them up yourself.
    - `ready` → leave the PR open.
    - `yolo` → merge (work-issue step 9) only if **all** pass:
      - CI green — the Actions run for the branch head, watched in the background (work-issue step 9)
-     - work-issue step 7 says `OTA`
      - review–fix loop ended with no real findings
      Any gate fails → no merge; `gh issue edit <n> --add-label needs-review`; PR comment naming the failed gate.
-     Until the first production build exists, the fingerprint gate always fails. That is intended.
+     Ships as `NATIVE` is fine: the merge builds and submits to TestFlight (App Store release stays manual).
+     Note it in the chat message so the developer knows to test the TestFlight build.
    - Real findings left after 5 review rounds, unresolvable rebase conflict, or any unexpected error → `needs-review`
      with a comment explaining; never merge.
 7. **Finish:** remove `in-progress`; update the review page; `SendUserFile` one screenshot (status `proactive`)

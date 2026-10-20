@@ -12,6 +12,7 @@ description: Use when the developer wants to brainstorm or design a feature or c
 3. Read the understanding back in a short note and wait for an OK.
 4. `gh issue create --label enhancement --title "<title>" --body-file <tmpfile>` using
    `.github/ISSUE_TEMPLATE/feature.md` (Goal, Acceptance criteria) plus a "Decisions" section.
+   If it builds on another open issue, put a line `Depends on #<m>` in the body (autopilot waits for #<m>).
    Add `ready` or `yolo` **only if the developer says so** — those labels start autopilot work.
 5. Create the review page (`review-page` skill), status `designing`, Design section filled; comment its link.
 6. Reply with the issue URL and review-page URL. No branch, no code.
