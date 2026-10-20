@@ -45,6 +45,10 @@ public func normalize(_ state: AppState) -> AppState {
   return s
 }
 public func saveDish(_ state: AppState, _ dish: Dish) throws -> AppState {
+  normalize(try saveDishWithoutNormalization(state, dish))
+}
+// Batch callers defer shopping-list cleanup until all dishes have been saved.
+func saveDishWithoutNormalization(_ state: AppState, _ dish: Dish) throws -> AppState {
   let body = try toDishBody(
     dish.name,
     dish.ingredients.map { FormRow(name: $0.name, amount: formatAmount($0.amount), unit: $0.unit) })
@@ -68,7 +72,7 @@ public func saveDish(_ state: AppState, _ dish: Dish) throws -> AppState {
     s.dishes.append(saved)
   }
   s.dishes.sort { $0.name.compare($1.name, locale: Locale(identifier: "fi")) == .orderedAscending }
-  return normalize(s)
+  return s
 }
 public func deleteDish(_ state: AppState, _ id: String) -> AppState {
   var s = state
