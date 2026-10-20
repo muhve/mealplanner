@@ -1,5 +1,7 @@
 import MealPlannerCore
 import SwiftUI
+import PhotosUI
+import AVFoundation
 
 @MainActor struct DishListView: View {
   @Environment(AppStore.self) private var store
@@ -29,10 +31,13 @@ import SwiftUI
           NavigationLink {
             DishFormView(dish: dish)
           } label: {
-            VStack(alignment: .leading, spacing: 6) {
-              Text(dish.name).font(.headline)
-              Text(dish.ingredients.isEmpty ? "Ei ainesosia" : ingredientSummary(dish.ingredients))
-                .font(.subheadline).foregroundStyle(Theme.muted)
+            HStack(spacing: 12) {
+              if let photo = dish.photo { DishPhotoView(name: photo, height: 44, width: 44) }
+              VStack(alignment: .leading, spacing: 6) {
+                Text(dish.name).font(.headline)
+                Text(dish.ingredients.isEmpty ? "Ei ainesosia" : ingredientSummary(dish.ingredients))
+                  .font(.subheadline).foregroundStyle(Theme.muted)
+              }
             }.padding(.vertical, 4)
           }.listRowBackground(Theme.surface)
         }
@@ -54,9 +59,20 @@ private struct IngredientFormRow: Identifiable {
   @State private var rows: [IngredientFormRow]
   @State private var error: String?
   @State private var confirm = false
+  @State private var editingInstructions = false
+  @State private var instructions: String
+  @State private var photo: String?
+  @State private var createdPhoto: String?
+  @State private var photoChoices = false
+  @State private var library = false
+  @State private var camera = false
+  @State private var selection: PhotosPickerItem?
+  @State private var loadingPhoto = false
   @FocusState private var focused: UUID?
   init(dish: Dish?) {
     self.dish = dish
+    _instructions = State(initialValue: dish?.instructions ?? "")
+    _photo = State(initialValue: dish?.photo)
     _name = State(initialValue: dish?.name ?? "")
     _rows = State(
       initialValue: (dish?.ingredients.map {
@@ -65,6 +81,16 @@ private struct IngredientFormRow: Identifiable {
   }
   var body: some View {
     Form {
+      Section("Kansikuva") {
+        if let photo {
+          DishPhotoView(name: photo, height: 180)
+          Button("Vaihda kuva") { photoChoices = true }
+          Button("Poista kuva", role: .destructive) { removePhoto() }
+        } else {
+          Button("Lisää kuva") { photoChoices = true }
+        }
+        if loadingPhoto { ProgressView("Ladataan kuvaa…") }
+      }.disabled(loadingPhoto).listRowBackground(Theme.surface)
       Section("Nimi") {
         TextField("esim. Lohikeitto", text: $name).accessibilityLabel("Nimi")
       }.listRowBackground(Theme.surface)
@@ -106,8 +132,19 @@ private struct IngredientFormRow: Identifiable {
           focused = row.id
         }.disabled(rows.count >= 100)
       }.listRowBackground(Theme.surface)
+      Section("Ohjeet") {
+        if dish != nil && !instructions.isEmpty && !editingInstructions {
+          Text(instructions).textSelection(.enabled)
+          Button("Muokkaa ohjeita") { editingInstructions = true }
+        } else {
+          TextEditor(text: $instructions)
+            .frame(minHeight: 150)
+            .scrollContentBackground(.hidden)
+            .accessibilityLabel("Ohjeet")
+        }
+      }.listRowBackground(Theme.surface)
       if let error { Text(error).foregroundStyle(Theme.error) }
-      Button("Tallenna", action: save).listRowBackground(Theme.surface)
+      Button("Tallenna", action: save).disabled(loadingPhoto).listRowBackground(Theme.surface)
       if dish != nil {
         Button("Poista ruokalaji", role: .destructive) { confirm = true }.listRowBackground(
           Theme.surface)
@@ -117,8 +154,54 @@ private struct IngredientFormRow: Identifiable {
     .warmList()
     .navigationTitle(dish == nil ? "Uusi ruokalaji" : "Muokkaa ruokalajia")
     .onAppear { error = nil }
+    .confirmationDialog("Kansikuva", isPresented: $photoChoices, titleVisibility: .visible) {
+      Button("Valitse kirjastosta") { library = true }
+      if UIImagePickerController.isSourceTypeAvailable(.camera) {
+        Button("Ota kuva") { requestCamera() }
+      }
+      Button("Peruuta", role: .cancel) {}
+    }
+    .photosPicker(isPresented: $library, selection: $selection, matching: .images)
+    .onChange(of: selection) { _, item in
+      guard let item else { return }
+      loadingPhoto = true
+      Task { @MainActor in
+        defer { loadingPhoto = false; selection = nil }
+        do {
+          guard let data = try await item.loadTransferable(type: Data.self) else {
+            throw CoreError("Kuvan lataaminen epäonnistui.")
+          }
+          let file = try await PhotoStore.save(data: data)
+          acceptPhoto(file)
+        } catch {
+          self.error = "Kuvan lataaminen epäonnistui."
+        }
+      }
+    }
+    .sheet(isPresented: $camera) {
+      CameraPicker { image in
+        camera = false
+        if let image {
+          loadingPhoto = true
+          Task { @MainActor in
+            defer { loadingPhoto = false }
+            do {
+              let file = try await PhotoStore.save(cameraImage: image)
+              acceptPhoto(file)
+            } catch { self.error = "Kuvan tallentaminen epäonnistui." }
+          }
+        }
+      }.ignoresSafeArea()
+    }
     .navigationBarTitleDisplayMode(.inline)
-    .toolbar { if dish == nil { Button("Peruuta") { dismiss() } } }
+    .toolbar {
+      if dish == nil {
+        Button("Peruuta") {
+          removePhoto()
+          dismiss()
+        }
+      }
+    }
     .confirmationDialog(
       "Poistetaanko ”\(tidy(name).isEmpty ? "ruokalaji" : tidy(name))” pysyvästi? Se poistuu myös nykyiseltä ostoslistalta.",
       isPresented: $confirm, titleVisibility: .visible
@@ -132,6 +215,30 @@ private struct IngredientFormRow: Identifiable {
       Button("Peruuta", role: .cancel) {}
     }
   }
+  private func removePhoto() {
+    if let createdPhoto { PhotoStore().delete(createdPhoto) }
+    createdPhoto = nil
+    photo = nil
+  }
+  private func acceptPhoto(_ file: String) {
+    if let createdPhoto { PhotoStore().delete(createdPhoto) }
+    createdPhoto = file
+    photo = file
+    error = nil
+  }
+  private func requestCamera() {
+    Task { @MainActor in
+      let status = AVCaptureDevice.authorizationStatus(for: .video)
+      let allowed: Bool
+      if status == .notDetermined {
+        allowed = await AVCaptureDevice.requestAccess(for: .video)
+      } else {
+        allowed = status == .authorized
+      }
+      if allowed { camera = true }
+      else { error = "Kameran käyttö on estetty. Salli se Asetuksista." }
+    }
+  }
   private func number(_ id: UUID) -> Int { (rows.firstIndex { $0.id == id } ?? 0) + 1 }
   private func unitSuggestions(_ query: String) -> [String] {
     let items = UNITS.filter { query.isEmpty || $0.contains(query) }
@@ -142,10 +249,11 @@ private struct IngredientFormRow: Identifiable {
   }
   private func save() {
     do {
-      let body = try toDishBody(name, rows.map(\.value))
-      let saved = Dish(id: dish?.id ?? store.id(), name: body.name, ingredients: body.ingredients)
+      let body = try toDishBody(name, rows.map(\.value), instructions: instructions, photo: photo)
+      let saved = Dish(id: dish?.id ?? store.id(), name: body.name, ingredients: body.ingredients,
+                       photo: body.photo, instructions: body.instructions)
       error = store.change { try saveDish($0, saved) }
-      if error == nil { dismiss() }
+      if error == nil { createdPhoto = nil; dismiss() }
     } catch { self.error = error.localizedDescription }
   }
 }

@@ -13,6 +13,13 @@ final class FileDocumentStore: DocumentStore {
   private func url(_ key: String) -> URL {
     directory.appendingPathComponent(key).appendingPathExtension("json")
   }
+  func backupKeys() throws -> [String] {
+    try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+      .filter { $0.pathExtension == "json" }
+      .map { $0.deletingPathExtension().lastPathComponent }
+      .filter { $0.hasPrefix(documentKey + "-backup-") }
+      .sorted()
+  }
   func exists(_ key: String) throws -> Bool {
     FileManager.default.fileExists(atPath: url(key).path)
   }
@@ -29,21 +36,26 @@ final class FileDocumentStore: DocumentStore {
   private(set) var state: AppState?
   var loadFailed = false
   private var documents: FileDocumentStore?
+  private var didCleanUpPhotos = false
   init() { load() }
   func load(skipLegacy: Bool = false) {
     do {
       let documents = try FileDocumentStore()
       let now = Date().timeIntervalSince1970 * 1000
-      let loaded: AppState
-      if skipLegacy {
-        loaded = try startWithoutLegacyData(store: documents, now: now)
-      } else {
-        try legacyMigration(store: documents, now: now) { try LegacyExpoStore.read() }
-        loaded = try loadState(store: documents, now: now)
+      let startup = try loadStartupState(store: documents, now: now, skipLegacy: skipLegacy) {
+        try LegacyExpoStore.read()
       }
-      // Establish the Swift document even on a fresh install, making migration one-time.
-      try documents.save(documentKey, encodeState(loaded))
+      let loaded = startup.state
       self.documents = documents
+      if !didCleanUpPhotos {
+        // Once after the first successful load, before publishing state or opening forms.
+        // Drafts abandoned by back navigation or termination are reclaimed next launch.
+        // Recovery/migration launches and unreadable backups leave every photo intact.
+        if let backups = startup.photoCleanupBackups {
+          PhotoStore().cleanUp(state: loaded, backups: backups)
+        }
+        didCleanUpPhotos = true
+      }
       state = loaded
       loadFailed = false
     } catch {
@@ -56,6 +68,14 @@ final class FileDocumentStore: DocumentStore {
       let next = try operation(state)
       try documents.save(documentKey, encodeState(next))
       self.state = next
+      // Files remain intact if validation or document persistence fails.
+      let referenced = Set(next.dishes.compactMap(\.photo))
+      for old in state.dishes {
+        let new = next.dishes.first { $0.id == old.id }
+        if let file = photoFileToDelete(old: old, new: new), !referenced.contains(file) {
+          PhotoStore().delete(file)
+        }
+      }
       return nil
     } catch {
       return error.localizedDescription

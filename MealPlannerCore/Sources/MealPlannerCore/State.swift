@@ -47,7 +47,8 @@ public func normalize(_ state: AppState) -> AppState {
 public func saveDish(_ state: AppState, _ dish: Dish) throws -> AppState {
   let body = try toDishBody(
     dish.name,
-    dish.ingredients.map { FormRow(name: $0.name, amount: formatAmount($0.amount), unit: $0.unit) })
+    dish.ingredients.map { FormRow(name: $0.name, amount: formatAmount($0.amount), unit: $0.unit) },
+    instructions: dish.instructions, photo: dish.photo)
   var known = Dictionary(
     uniqueKeysWithValues: knownIngredients(state.dishes.filter { $0.id != dish.id }).map {
       ($0.key, $0.name)
@@ -60,7 +61,8 @@ public func saveDish(_ state: AppState, _ dish: Dish) throws -> AppState {
     i.name = known[key]!
     return i
   }
-  let saved = Dish(id: dish.id, name: body.name, ingredients: ingredients)
+  let saved = Dish(id: dish.id, name: body.name, ingredients: ingredients,
+                   photo: body.photo, instructions: body.instructions)
   var s = state
   if let i = s.dishes.firstIndex(where: { $0.id == dish.id }) {
     s.dishes[i] = saved

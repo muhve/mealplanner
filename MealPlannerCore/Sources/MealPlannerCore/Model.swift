@@ -21,10 +21,31 @@ public struct Dish: Codable, Equatable, Sendable {
   public var id: String
   public var name: String
   public var ingredients: [Ingredient]
-  public init(id: String, name: String, ingredients: [Ingredient]) {
+  public var photo: String?
+  public var instructions: String?
+  public init(id: String, name: String, ingredients: [Ingredient], photo: String? = nil, instructions: String? = nil) {
     self.id = id
     self.name = name
     self.ingredients = ingredients
+    self.photo = photo
+    self.instructions = instructions
+  }
+  enum CodingKeys: String, CodingKey { case id, name, ingredients, photo, instructions }
+  public init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    id = try c.decode(String.self, forKey: .id)
+    name = try c.decode(String.self, forKey: .name)
+    ingredients = try c.decode([Ingredient].self, forKey: .ingredients)
+    photo = validPhotoFileName(try? c.decode(String.self, forKey: .photo))
+    instructions = try? c.decode(String.self, forKey: .instructions)
+  }
+  public func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(id, forKey: .id)
+    try c.encode(name, forKey: .name)
+    try c.encode(ingredients, forKey: .ingredients)
+    try c.encodeIfPresent(photo, forKey: .photo)
+    try c.encodeIfPresent(instructions, forKey: .instructions)
   }
 }
 public struct ItemState: Codable, Equatable, Sendable {
@@ -230,9 +251,13 @@ public struct FormRow: Codable, Equatable, Sendable {
 public struct DishBody: Codable, Equatable, Sendable {
   public var name: String
   public var ingredients: [Ingredient]
-  public init(name: String, ingredients: [Ingredient]) {
+  public var photo: String?
+  public var instructions: String?
+  public init(name: String, ingredients: [Ingredient], photo: String? = nil, instructions: String? = nil) {
     self.name = name
     self.ingredients = ingredients
+    self.photo = photo
+    self.instructions = instructions
   }
 }
 public struct Suggestion: Codable, Equatable, Sendable {

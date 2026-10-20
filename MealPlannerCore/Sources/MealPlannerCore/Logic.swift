@@ -140,7 +140,8 @@ public func ingredientSummary(_ ingredients: [Ingredient]) -> String {
     [formatAmount($0.amount), $0.unit, $0.name].filter { !$0.isEmpty }.joined(separator: " ")
   }.joined(separator: ", ")
 }
-public func toDishBody(_ name: String, _ rows: [FormRow]) throws -> DishBody {
+public func toDishBody(_ name: String, _ rows: [FormRow], instructions: String? = nil,
+                       photo: String? = nil) throws -> DishBody {
   if tidy(name).isEmpty { throw CoreError("Anna ruokalajille nimi.") }
   if tidy(name).utf16.count > 100 { throw CoreError("Nimi on liian pitkä (enintään 100 merkkiä).") }
   func blank(_ r: FormRow) -> Bool {
@@ -158,7 +159,8 @@ public func toDishBody(_ name: String, _ rows: [FormRow]) throws -> DishBody {
     if tidy(r.unit).utf16.count > 20 { throw CoreError(prefix + "yksikkö on liian pitkä.") }
     ingredients.append(Ingredient(name: tidy(r.name), amount: amount, unit: tidy(r.unit)))
   }
-  return DishBody(name: tidy(name), ingredients: ingredients)
+  return DishBody(name: tidy(name), ingredients: ingredients,
+                  photo: validPhotoFileName(photo), instructions: try normalizedInstructions(instructions))
 }
 public func knownIngredients(_ dishes: [Dish]) -> [KnownIngredient] {
   var order: [String] = []
@@ -210,4 +212,40 @@ public func formatDay(_ ms: Double, timeZone: TimeZone = .current) -> String {
   let c = calendar.dateComponents(
     [.day, .month, .year], from: Date(timeIntervalSince1970: ms / 1000))
   return "\(c.day!).\(c.month!).\(c.year!)"
+}
+
+
+public func validPhotoFileName(_ name: String?) -> String? {
+  guard let name, name != ".", name != "..", (1...100).contains(name.utf8.count),
+    name.utf8.allSatisfy({
+      (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0)
+        || $0 == 46 || $0 == 95 || $0 == 45
+    }) else { return nil }
+  return name
+}
+
+public func normalizedInstructions(_ value: String?) throws -> String? {
+  var lines = (value ?? "").replacingOccurrences(of: "\r\n", with: "\n")
+    .components(separatedBy: "\n")
+  while let first = lines.first, first.allSatisfy({ $0.isWhitespace }) { lines.removeFirst() }
+  while let last = lines.last, last.allSatisfy({ $0.isWhitespace }) { lines.removeLast() }
+  let text = lines.joined(separator: "\n")
+  guard text.count <= 5000 else {
+    throw CoreError("Ohjeet ovat liian pitkät (enintään 5000 merkkiä).")
+  }
+  return text.isEmpty ? nil : text
+}
+
+public func photoFileToDelete(old: Dish?, new: Dish?) -> String? {
+  guard let photo = validPhotoFileName(old?.photo), photo != new?.photo else { return nil }
+  return photo
+}
+
+public func orphanedPhotos(state: AppState, files: [String], backups: [String] = []) -> [String] {
+  let referenced = Set(state.dishes.compactMap { validPhotoFileName($0.photo) })
+  // Search raw text conservatively, including malformed documents and non-photo fields.
+  return files.filter { file in
+    validPhotoFileName(file) != nil && !referenced.contains(file)
+      && !backups.contains { $0.contains(file) }
+  }
 }
