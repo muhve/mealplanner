@@ -2,10 +2,13 @@
 
 Closes #
 
-## Ships as
+Review page:
 
-- [ ] OTA update (JS/assets only)
-- [ ] New native build → TestFlight (native deps, app.json/plugins, or SDK changed)
+## Tested on device/simulator
+
+- [ ] not yet
+- [ ] yes
 
 ## Testing
 
+`swift build && swift test` in `MealPlannerCore/`:

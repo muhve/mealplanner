@@ -1,25 +1,16 @@
 name: CI
-
 on:
   pull_request:
   push:
     branches: [main]
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  check:
+  core:
     runs-on: ubuntu-latest
+    container: swift:6.2-bookworm
+    defaults:
+      run:
+        working-directory: MealPlannerCore
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npx expo-doctor
+      - run: swift build
+      - run: swift test

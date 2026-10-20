@@ -41,8 +41,8 @@ Commit everything on the issue branch first — Codex starts from a clone of the
   ```
   Rules:
   - Change only what this task needs. Do not run git commit, push, or anything that deploys.
-  - Never edit ios/ or android/. Add packages only with `npx expo install <pkg>`.
-  - Before you finish, run `npm run lint && npm run typecheck` and fix what fails.
+  - Edit project.yml, never the generated .xcodeproj. Keep Core Foundation-only; add no dependencies.
+  - Before you finish, run `swift build && swift test` in MealPlannerCore/ and fix what fails.
   - End with a short report: files changed, what each change does, any acceptance criterion you could not meet or
     verify, and anything you are unsure about. No code in the report.
   ```
@@ -61,11 +61,12 @@ failed or the report is missing.
 ## 3. Collect and verify
 
 1. `git -C "$C/<n>-clone" status --short` — no changes outside the planned files, nothing touching `ios/`,
-   `android/`, `.gitignore` or `app.json` unless the brief asked for it.
+   `android/`, `.gitignore` or `project.yml` unless the brief asked for it.
 2. `tools/codex/run.sh collect "$C/<n>-clone" "codex: <what>"` — commits Codex's changes and fast-forwards the issue
    branch in this checkout.
-3. `npm ci` if `package-lock.json` changed, then run the gates yourself:
-   `npm run lint && npm run typecheck && npx expo-doctor`.
+3. Run the gates yourself in the Swift Docker image:
+   `docker run --rm -v "$PWD":/w -w /w/MealPlannerCore swift:6.2-bookworm sh -c 'swift build && swift test'`.
+   Codex writes Swift; Claude verifies Core and reviews. The developer builds and tests SwiftUI in Xcode and sends simulator screenshots.
 4. Review the diff (work-issue step 5).
 
 ## 4. Fix rounds

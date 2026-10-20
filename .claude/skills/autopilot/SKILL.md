@@ -5,7 +5,7 @@ description: Use when running autopilot — started with "/loop /autopilot" or "
 
 # Autopilot
 
-Runs in this container inside a self-paced `/loop`. Env vars do not survive between Bash calls: start **every** command that runs `gh`, `eas` or a push with `set -a; . ./.env; set +a;`.
+Runs in this container inside a self-paced `/loop`. Env vars do not survive between Bash calls: start **every** command that runs `gh` or a push with `set -a; . ./.env; set +a;`.
 Stop: developer says stop → `ScheduleWakeup` with `stop: true`.
 
 ## Start-up (first iteration only)
@@ -45,11 +45,9 @@ earlier run; never pick them up yourself.
      - CI green — the Actions run for the branch head, watched in the background (work-issue step 9)
      - review–fix loop ended with no real findings
      Any gate fails → no merge; `gh issue edit <n> --add-label needs-review`; PR comment naming the failed gate.
-     Ships as `NATIVE` is fine: the merge builds and submits to TestFlight (App Store release stays manual).
-     Note it in the chat message so the developer knows to test the TestFlight build.
+     Merge only merges code. The developer builds and releases manually from Xcode.
    - Real findings left after 5 review rounds, unresolvable rebase conflict, or any unexpected error → `needs-review`
      with a comment explaining; never merge.
-7. **Finish:** remove `in-progress`; update the review page; `SendUserFile` one screenshot (status `proactive`)
-   with a one-line caption: issue, PR link, merged or waiting. Go straight to step 1.
+7. **Finish:** remove `in-progress`; update the review page; send a one-line chat message: issue, PR link, merged or waiting. Include a screenshot from the developer if available (status `proactive`). Go straight to step 1.
 
 Never push to `main`, never force-push anything but the issue branch, never close or delete issues.
