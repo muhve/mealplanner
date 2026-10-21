@@ -2,6 +2,18 @@ import MealPlannerCore
 import SwiftUI
 import PhotosUI
 import AVFoundation
+import CoreTransferable
+
+private struct SharedDishes: Transferable {
+  let dishes: [Dish]
+  let state: AppState
+
+  static var transferRepresentation: some TransferRepresentation {
+    ProxyRepresentation(exporting: { (shared: SharedDishes) in
+      shareText(shared.dishes, state: shared.state)
+    })
+  }
+}
 
 @MainActor struct DishListView: View {
   @Environment(AppStore.self) private var store
@@ -39,6 +51,19 @@ import AVFoundation
                   .font(.subheadline).foregroundStyle(Theme.muted)
               }
             }.padding(.vertical, 4)
+          }.listRowBackground(Theme.surface)
+            .contextMenu {
+              if let state = store.state {
+                ShareLink("Jaa", item: SharedDishes(dishes: [dish], state: state),
+                  preview: SharePreview(dish.name))
+              }
+            }
+        }
+        if !shown.isEmpty, let state = store.state {
+          Section {
+            ShareLink(
+              tidy(query).isEmpty ? "Jaa kaikki (\(shown.count))" : "Jaa näytetyt (\(shown.count))",
+              item: SharedDishes(dishes: shown, state: state), preview: SharePreview("Ruokalajit"))
           }.listRowBackground(Theme.surface)
         }
       }
@@ -198,6 +223,10 @@ private struct IngredientFormRow: Identifiable {
     }
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
+      if let state = store.state, let saved = state.dishes.first(where: { $0.id == dish?.id }) {
+        ShareLink("Jaa", item: SharedDishes(dishes: [saved], state: state),
+          preview: SharePreview(saved.name))
+      }
       if dish == nil {
         Button("Peruuta") {
           removePhoto()

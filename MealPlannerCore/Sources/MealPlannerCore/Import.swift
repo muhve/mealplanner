@@ -64,10 +64,8 @@ public func parseImport(_ text: String) -> [ImportBlock] {
       current = nil
       continue
     }
-    if let first = text.first, "-*•".contains(first), text.dropFirst().first?.isWhitespace == true {
-      text = tidy(String(text.dropFirst()))
-    }
-    if current == nil { current = ImportBlock(line: index + 1, name: text, ingredients: []) }
+    text = stripImportListMarker(text)
+    if current == nil { current = ImportBlock(line: index + 1, name: unquote(text) ?? text, ingredients: []) }
     else { current?.ingredients.append(ImportLine(line: index + 1, text: text)) }
   }
   if let current { blocks.append(current) }
@@ -171,79 +169,114 @@ private func validation(_ dish: ImportDish, _ choices: ImportChoices) -> [Import
   }
   return issues
 }
+private func importUnitMatch(_ text: String, used: [String]) -> NameMatch {
+  guard !text.isEmpty else { return .none }
+  if let exact = used.first(where: { fold(tidy($0)) == fold(tidy(text)) }) {
+    return .exact(exact)
+  }
+  let key = aliases[unitKey(text)] ?? unitKey(text)
+  let candidates = used + importUnits.filter { canonical in
+    !used.contains { fold(tidy($0)) == canonical }
+  }
+  if let canonical = candidates.first(where: { unitKey($0) == key }) {
+    return canonical == text ? .exact(canonical) : .close(canonical)
+  }
+  let knownUnits = candidates.map { KnownIngredient(key: fold($0), name: $0, unit: "", uses: 0) }
+  return matchIngredientName(text, known: knownUnits)
+}
+func stripImportListMarker(_ text: String) -> String {
+  if let first = text.first, "-*•".contains(first), text.dropFirst().first?.isWhitespace == true {
+    return tidy(String(text.dropFirst()))
+  }
+  return text
+}
+private func unquote(_ text: String) -> String? {
+  guard text.count >= 2, text.first == "\"", text.last == "\"" else { return nil }
+  return tidy(String(text.dropFirst().dropLast()))
+}
+private let quotedUnitAndName = try! NSRegularExpression(pattern: #"^"(.+?)" "(.+)"$"#)
+private let quotedAmount = try! NSRegularExpression(pattern: #"^\d+(,\d{1,3})?$"#)
+
+func parseIngredientLine(_ text: String, usedUnits: [String])
+  -> (amountText: String, unit: String, name: String)
+{
+  func quotedParts(_ text: String) -> (unit: String, name: String)? {
+    if let match = quotedUnitAndName.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+      let u = Range(match.range(at: 1), in: text), let n = Range(match.range(at: 2), in: text),
+      !tidy(String(text[n])).isEmpty {
+      return (tidy(String(text[u])), tidy(String(text[n])))
+    }
+    if let name = unquote(text), !name.isEmpty { return ("", name) }
+    return nil
+  }
+  if let space = text.firstIndex(of: " ") {
+    let amount = String(text[..<space])
+    let rest = String(text[text.index(after: space)...])
+    if rest.hasPrefix("\""),
+      quotedAmount.firstMatch(in: amount, range: NSRange(amount.startIndex..., in: amount)) != nil,
+      let parts = quotedParts(rest) {
+      return (amount, parts.unit, parts.name)
+    }
+  }
+  if let parts = quotedParts(text) { return ("", parts.unit, parts.name) }
+  func recognized(_ text: String) -> Bool { importUnitMatch(text, used: usedUnits) != .none }
+  var tokens = text.split(separator: " ").map(String.init)
+  var amountText = ""
+  var unit = ""
+  func splitUnit(_ token: String) -> (number: String, unit: String) {
+    if let range = token.range(of: #"[\p{L}]+\.?$"#, options: .regularExpression) {
+      let suffix = String(token[range])
+      if recognized(suffix) { return (String(token[..<range.lowerBound]), suffix) }
+    }
+    return (token, "")
+  }
+  if let first = tokens.first, startsQuantity(first), !startsPercentage(tokens[...]),
+    splitUnit(first).number.range(of: #"^-?[\d.,/½¼¾⅓⅔]+$"#, options: .regularExpression) != nil {
+    let initial = splitUnit(tokens.removeFirst())
+    amountText = initial.number
+    unit = initial.unit
+    if unit.isEmpty, amountText.range(of: #"^\d+$"#, options: .regularExpression) != nil,
+      !startsPercentage(tokens[...]),
+      let next = tokens.first, fractionNumber(splitUnit(next).number) != nil
+        || splitUnit(next).number.range(of: #"^\d+/\d+$"#, options: .regularExpression) != nil {
+      let fraction = splitUnit(tokens.removeFirst())
+      if let part = fractionNumber(fraction.number),
+        let whole = Double(amountText) {
+        amountText = formatAmount(((whole + part) * 1000).rounded() / 1000)
+      } else { amountText = "?" }
+      unit = fraction.unit
+    } else if unit.isEmpty,
+      amountText.range(of: #"^\d{1,3}$"#, options: .regularExpression) != nil {
+      while let next = tokens.first {
+        if startsPercentage(tokens[...]) { break }
+        let group = splitUnit(next)
+        guard group.number.range(of: #"^\d{3}([.,]\d+)?$"#, options: .regularExpression) != nil else { break }
+        tokens.removeFirst()
+        amountText += group.number
+        unit = group.unit
+        if !unit.isEmpty || group.number.contains(",") || group.number.contains(".") { break }
+      }
+    }
+    amountText = decimalFraction(amountText)
+    if unit.isEmpty, let next = tokens.first, recognized(next) { unit = tokens.removeFirst() }
+    if let next = tokens.first, isLeftoverQuantity(next), !startsPercentage(tokens[...]) {
+      amountText = "?"
+    }
+  }
+  return (amountText, unit, tokens.joined(separator: " "))
+}
 public func makeImportPreview(_ text: String, state: AppState) -> ImportPreview {
   let known = knownIngredients(state.dishes).sorted { $0.uses > $1.uses }
   var used: [String] = []
   for i in state.dishes.flatMap(\.ingredients) where !tidy(i.unit).isEmpty {
     if !used.contains(where: { fold(tidy($0)) == fold(tidy(i.unit)) }) { used.append(tidy(i.unit)) }
   }
-  func unitMatch(_ text: String) -> NameMatch {
-    guard !text.isEmpty else { return .none }
-    if let exact = used.first(where: { fold(tidy($0)) == fold(tidy(text)) }) {
-      return .exact(exact)
-    }
-    let key = aliases[unitKey(text)] ?? unitKey(text)
-    let candidates = used + importUnits.filter { canonical in
-      !used.contains { fold(tidy($0)) == canonical }
-    }
-    if let canonical = candidates.first(where: { unitKey($0) == key }) {
-      return canonical == text ? .exact(canonical) : .close(canonical)
-    }
-    let knownUnits = candidates.map { KnownIngredient(key: fold($0), name: $0, unit: "", uses: 0) }
-    return matchIngredientName(text, known: knownUnits)
-  }
-  func recognized(_ text: String) -> Bool {
-    unitMatch(text) != .none
-  }
   var seen: Set<String> = []
   let dishes = parseImport(text).map { block in
     let ingredients = block.ingredients.map { source in
-      var tokens = source.text.split(separator: " ").map(String.init)
-      var amountText = ""
-      var unit = ""
-      func splitUnit(_ token: String) -> (number: String, unit: String) {
-        if let range = token.range(of: #"[\p{L}]+\.?$"#, options: .regularExpression) {
-          let suffix = String(token[range])
-          if recognized(suffix) { return (String(token[..<range.lowerBound]), suffix) }
-        }
-        return (token, "")
-      }
-      if let first = tokens.first, startsQuantity(first), !startsPercentage(tokens[...]),
-        splitUnit(first).number.range(of: #"^-?[\d.,/½¼¾⅓⅔]+$"#, options: .regularExpression) != nil {
-        let initial = splitUnit(tokens.removeFirst())
-        amountText = initial.number
-        unit = initial.unit
-        if unit.isEmpty, amountText.range(of: #"^\d+$"#, options: .regularExpression) != nil,
-          !startsPercentage(tokens[...]),
-          let next = tokens.first, fractionNumber(splitUnit(next).number) != nil
-            || splitUnit(next).number.range(of: #"^\d+/\d+$"#, options: .regularExpression) != nil {
-          let fraction = splitUnit(tokens.removeFirst())
-          if let part = fractionNumber(fraction.number),
-            let whole = Double(amountText) {
-            amountText = formatAmount(((whole + part) * 1000).rounded() / 1000)
-          } else { amountText = "?" }
-          unit = fraction.unit
-        } else if unit.isEmpty,
-          amountText.range(of: #"^\d{1,3}$"#, options: .regularExpression) != nil {
-          while let next = tokens.first {
-            if startsPercentage(tokens[...]) { break }
-            let group = splitUnit(next)
-            guard group.number.range(of: #"^\d{3}([.,]\d+)?$"#, options: .regularExpression) != nil else { break }
-            tokens.removeFirst()
-            amountText += group.number
-            unit = group.unit
-            if !unit.isEmpty || group.number.contains(",") || group.number.contains(".") { break }
-          }
-        }
-        amountText = decimalFraction(amountText)
-        if unit.isEmpty, let next = tokens.first, recognized(next) { unit = tokens.removeFirst() }
-        if let next = tokens.first, isLeftoverQuantity(next), !startsPercentage(tokens[...]) {
-          amountText = "?"
-        }
-      }
-      let name = tokens.joined(separator: " ")
+      let (amountText, unit, name) = parseIngredientLine(source.text, usedUnits: used)
       let (silentName, nameSuggestion) = spellings(name, matchIngredientName(name, known: known))
-      let (silentUnit, unitSuggestion) = spellings(unit, unitMatch(unit))
+      let (silentUnit, unitSuggestion) = spellings(unit, importUnitMatch(unit, used: used))
       let amount: Double?
       if case .value(let value) = parseAmount(amountText) { amount = value } else { amount = nil }
       return ImportIngredient(line: source.line, amount: amount, typedName: name, typedUnit: unit,
