@@ -44,11 +44,15 @@ public func normalize(_ state: AppState) -> AppState {
   }
   return s
 }
-public func saveDish(_ state: AppState, _ dish: Dish) throws -> AppState {
-  normalize(try saveDishWithoutNormalization(state, dish))
+public func saveDish(_ state: AppState, _ edited: Dish, original: Dish? = nil) throws -> AppState {
+  normalize(try saveDishWithoutNormalization(state, edited, original: original))
 }
 // Batch callers defer shopping-list cleanup until all dishes have been saved.
-func saveDishWithoutNormalization(_ state: AppState, _ dish: Dish) throws -> AppState {
+func saveDishWithoutNormalization(_ state: AppState, _ edited: Dish, original: Dish? = nil) throws -> AppState {
+  let current = state.dishes.first { $0.id == (original?.id ?? edited.id) }
+  let dish: Dish
+  if let original { dish = try applyDishEdits(current: current, original: original, edited: edited) }
+  else { dish = edited }
   let body = try toDishBody(
     dish.name,
     dish.ingredients.map { FormRow(name: $0.name, amount: formatAmount($0.amount), unit: $0.unit) },
@@ -65,8 +69,16 @@ func saveDishWithoutNormalization(_ state: AppState, _ dish: Dish) throws -> App
     i.name = known[key]!
     return i
   }
-  let saved = Dish(id: dish.id, name: body.name, ingredients: ingredients,
+  var saved = Dish(id: dish.id, name: body.name, ingredients: ingredients,
                    photo: body.photo, instructions: body.instructions)
+  if let original, let current {
+    // Validation/canonicalization applies to edited fields only. Untouched remote
+    // values must not acquire new timestamps merely because this form was saved.
+    if edited.name == original.name { saved.name = current.name }
+    if edited.instructions == original.instructions { saved.instructions = current.instructions }
+    if edited.photo == original.photo { saved.photo = current.photo }
+    if edited.ingredients == original.ingredients { saved.ingredients = current.ingredients }
+  }
   var s = state
   if let i = s.dishes.firstIndex(where: { $0.id == dish.id }) {
     s.dishes[i] = saved
