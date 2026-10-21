@@ -43,7 +43,10 @@ import AVFoundation
         }
       }
     }.warmList().navigationTitle("Ruokalajit")
-      .toolbar { NavigationLink("+ Uusi") { DishFormView(dish: nil) } }
+      .toolbar {
+        ToolbarItem(placement: .topBarLeading) { NavigationLink("Tuo") { ImportView() } }
+        ToolbarItem(placement: .topBarTrailing) { NavigationLink("+ Uusi") { DishFormView(dish: nil) } }
+      }
   }
 }
 private struct IngredientFormRow: Identifiable {
